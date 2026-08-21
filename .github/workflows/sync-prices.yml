@@ -1,14 +1,7 @@
 name: Sync Ozon prices
 
 on:
-  schedule:
-    - cron: "0 3 * * *"
   workflow_dispatch: {}
-  push:
-    branches: [main]
-    paths:
-      - "config/prices.csv"
-      - "scripts/sync_prices.py"
 
 jobs:
   sync:
