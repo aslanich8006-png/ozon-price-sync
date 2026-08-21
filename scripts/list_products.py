@@ -10,7 +10,7 @@ import json
 import urllib.request
 import urllib.error
 
-API_URL = "https://api-seller.ozon.ru/v2/product/list"
+API_URL = "https://api-seller.ozon.ru/v3/product/list"
 
 
 def main():
