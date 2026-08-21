@@ -2,17 +2,16 @@
 """
 Телеграм-бот для управления синхронизацией цен Ozon по команде.
 
-Не меняет цены сам по себе — только слушает сообщения и реагирует на команды:
+Не меняет цены сам по себе — только реагирует на команды:
   /start или /help   - подсказка по командам
   /sync              - пересчитать и отправить в Ozon ВСЕ цены из config/prices.csv
   /prices            - показать список товаров и текущих цен из config/prices.csv
   <артикул> <цена>   - изменить цену одного товара и сразу отправить в Ozon
                         (например: "SHETKA-7-OZON 1200")
 
-Скрипт запускается по расписанию каждые несколько минут (просто проверяет,
-не написал ли ты что-то боту) — сам по себе цены НЕ меняет, только реагирует
-на твои сообщения. Реагирует только на сообщения из чата TELEGRAM_CHAT_ID
-(твой личный чат с ботом), сообщения от посторонних игнорирует.
+Запускается мгновенно через Cloudflare Worker (вебхук Telegram), который передаёт
+текст сообщения и chat_id напрямую как параметры запуска — getUpdates не используется,
+т.к. конфликтует с активным вебхуком (Telegram отдаёт 409 Conflict).
 """
 
 import csv
@@ -39,7 +38,6 @@ def tg_call(token, method, params=None):
 
 
 def send_message(token, chat_id, text):
-    # Telegram limit ~4096 символов на сообщение — режем на части
     for i in range(0, len(text), 3500):
         tg_call(token, "sendMessage", {"chat_id": chat_id, "text": text[i:i + 3500]})
 
@@ -127,6 +125,39 @@ def handle_set_price(token, chat_id, client_id, api_key, offer_id, price):
         send_message(token, chat_id, f"Ozon не принял цену для {offer_id}: {errs}\n(в prices.csv значение всё равно сохранено)")
 
 
+def process_message(token, allowed_chat_id, client_id, api_key, chat_id, text):
+    if chat_id != str(allowed_chat_id):
+        print(f"Игнорирую сообщение из чужого чата {chat_id}")
+        return
+
+    print(f"Команда: {text!r}")
+
+    if text in ("/start", "/help"):
+        send_message(token, chat_id,
+            "Команды:\n"
+            "/sync - синхронизировать все цены с Ozon\n"
+            "/prices - показать текущие цены\n"
+            "<артикул> <цена> - изменить цену одного товара, например:\n"
+            "SHETKA-7-OZON 1200")
+    elif text == "/sync":
+        handle_sync(token, chat_id, client_id, api_key)
+    elif text == "/prices":
+        handle_prices(token, chat_id)
+    else:
+        parts = text.rsplit(" ", 1)
+        offer_id, price = None, None
+        if len(parts) == 2:
+            try:
+                price = float(parts[1])
+                offer_id = parts[0].strip()
+            except ValueError:
+                pass
+        if offer_id and price is not None:
+            handle_set_price(token, chat_id, client_id, api_key, offer_id, price)
+        else:
+            send_message(token, chat_id, "Не понял команду. Напиши /help")
+
+
 def main():
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     allowed_chat_id = os.environ.get("TELEGRAM_CHAT_ID")
@@ -137,6 +168,14 @@ def main():
         print("Не заданы TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID", file=sys.stderr)
         sys.exit(1)
 
+    input_text = os.environ.get("INPUT_TEXT", "").strip()
+    input_chat_id = os.environ.get("INPUT_CHAT_ID", "").strip()
+
+    if input_text and input_chat_id:
+        process_message(token, allowed_chat_id, client_id, api_key, input_chat_id, input_text)
+        return
+
+    # Фолбэк для ручного запуска без параметров (используется редко, для отладки).
     updates = tg_call(token, "getUpdates", {"timeout": 0})
     results = updates.get("result", [])
 
@@ -152,40 +191,8 @@ def main():
             continue
         chat_id = str(msg.get("chat", {}).get("id"))
         text = (msg.get("text") or "").strip()
+        process_message(token, allowed_chat_id, client_id, api_key, chat_id, text)
 
-        if chat_id != str(allowed_chat_id):
-            print(f"Игнорирую сообщение из чужого чата {chat_id}")
-            continue
-
-        print(f"Команда: {text!r}")
-
-        if text in ("/start", "/help"):
-            send_message(token, chat_id,
-                "Команды:\n"
-                "/sync - синхронизировать все цены с Ozon\n"
-                "/prices - показать текущие цены\n"
-                "<артикул> <цена> - изменить цену одного товара, например:\n"
-                "SHETKA-7-OZON 1200")
-        elif text == "/sync":
-            handle_sync(token, chat_id, client_id, api_key)
-        elif text == "/prices":
-            handle_prices(token, chat_id)
-        else:
-            parts = text.rsplit(" ", 1)
-            offer_id, price = None, None
-            if len(parts) == 2:
-                try:
-                    price = float(parts[1])
-                    offer_id = parts[0].strip()
-                except ValueError:
-                    pass
-            if offer_id and price is not None:
-                handle_set_price(token, chat_id, client_id, api_key, offer_id, price)
-            else:
-                send_message(token, chat_id, "Не понял команду. Напиши /help")
-
-    # Подтверждаем получение всех обработанных сообщений Telegram-у,
-    # чтобы при следующем запуске они не пришли повторно.
     tg_call(token, "getUpdates", {"offset": last_update_id + 1, "timeout": 0})
 
 
