@@ -1,2 +1,12 @@
 offer_id,mode,value,cost_price,old_price
-SHETKA-7-OZON,fixed,500.0,,
+SHETKA-7-OZON,fixed,500,,
+КП-20ВТ-7ММ-10ШТ-СИН,fixed,590,,
+КП-20ВТ-7ММ-10ШТ-ЧЕР,fixed,590,,
+КП-20ВТ-7ММ-10ШТ-БЕЛ,fixed,590,,
+Салфетки  50шт,margin,30,150,
+пуфик серый,fixed,2990,,
+Кружка,margin,40,200,
+Щетка Доз 2,fixed,450,,
+полка на штангу,margin,35,800,
+пипидастр,fixed,350,,
+пакетик,fixed,50,,
