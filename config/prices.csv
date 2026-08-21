@@ -1,0 +1,5 @@
+offer_id,mode,value,cost_price,old_price
+SKU-001,fixed,1990,,2490
+SKU-002,margin,35,1200,
+SKU-003,fixed,3500,,
+SKU-004,margin,25,890,990
