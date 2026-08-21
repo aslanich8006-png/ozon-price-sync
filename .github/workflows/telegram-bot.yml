@@ -1,9 +1,16 @@
 name: Telegram bot (commands)
 
 on:
-  schedule:
-    - cron: "*/5 * * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      text:
+        description: "Текст сообщения из Telegram"
+        required: false
+        default: ""
+      chat_id:
+        description: "Chat ID отправителя"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -18,12 +25,14 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Poll Telegram and handle commands
+      - name: Handle Telegram command
         env:
           OZON_CLIENT_ID: ${{ secrets.OZON_CLIENT_ID }}
           OZON_API_KEY: ${{ secrets.OZON_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          INPUT_TEXT: ${{ github.event.inputs.text }}
+          INPUT_CHAT_ID: ${{ github.event.inputs.chat_id }}
         run: python scripts/telegram_bot.py
 
       - name: Commit price changes made via Telegram (if any)
